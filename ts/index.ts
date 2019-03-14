@@ -37,7 +37,7 @@ export class StorexGraphQLClient {
             methods[methodName] = async (...args) => {
                 const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition })
                 const response = await this.executeQuery({ query })
-                return response['data']
+                return response['data'][moduleName][methodName]
             }
         }
         return methods as Module

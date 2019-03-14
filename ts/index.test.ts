@@ -51,7 +51,7 @@ describe('StorexGraphQLClient', () => {
         }
         const { client, queries } = await setupTest({
             modules: { test: new TestModule() },
-            respond: async () => ({ data: 5 })
+            respond: async () => ({ data: { test: { testMethod: 5 } } })
         })
         const result = await client.getModules().test.testMethod({name: 'John'})
         expect(queries).toEqual([[{ query: `query { test { testMethod(name: "John") } }` }]])
@@ -77,7 +77,7 @@ describe('StorexGraphQLClient', () => {
         }
         const { client, queries } = await setupTest({
             modules: { test: new TestModule() },
-            respond: async () => ({ data: 5 })
+            respond: async () => ({ data: { test: { testMethod: 5 } } })
         })
         const result = await client.getModules().test.testMethod('foo', 'bar', { third: 'eggs' })
         expect(queries).toEqual([[{ query: `query { test { testMethod(first: "foo", second: "bar", third: "eggs") } }` }]])
@@ -107,7 +107,7 @@ describe('StorexGraphQLClient', () => {
         }
         const { client, queries } = await setupTest({
             modules: { test: new TestModule() },
-            respond: async () => ({ data: { displayName: 'Joe', age: 30 } })
+            respond: async () => ({ data: { test: { testMethod: { displayName: 'Joe', age: 30 } } } })
         })
         const result = await client.getModules().test.testMethod()
         expect(queries).toEqual([[{ query: `query { test { testMethod { displayName, age, id } } }` }]])
@@ -137,10 +137,10 @@ describe('StorexGraphQLClient', () => {
         }
         const { client, queries } = await setupTest({
             modules: { test: new TestModule() },
-            respond: async () => ({ data: [
+            respond: async () => ({ data: { test: { testMethod: [
                 { displayName: 'Joe', age: 30 },
                 { displayName: 'Bob', age: 40 },
-            ] })
+            ] } } })
         })
         const result = await client.getModules().test.testMethod()
         expect(queries).toEqual([[{ query: `query { test { testMethod { displayName, age, id } } }` }]])
