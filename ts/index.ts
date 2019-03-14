@@ -1,8 +1,10 @@
-import { StorageModuleInterface, PublicMethodDefinition, ensureDetailedPublicMethodValue, PublicMethodDetailedArg } from '@worldbrain/storex-pattern-modules'
+import { StorageRegistry } from '@worldbrain/storex';
+import { StorageModuleInterface, PublicMethodDefinition, ensureDetailedPublicMethodValue, PublicMethodDetailedArg, PublicMethodValue, isPublicMethodCollectionType } from '@worldbrain/storex-pattern-modules'
 
 export interface StorexGraphQLClientOptions {
     endpoint : string
     modules : {[name : string]: StorageModuleInterface}
+    storageRegistry : StorageRegistry
     fetch? : typeof fetch
 }
 export class StorexGraphQLClient {
@@ -43,7 +45,14 @@ export class StorexGraphQLClient {
 
     _convertCallToQuery(args : any[], options : { moduleName : string, methodName : string, methodDefinition : PublicMethodDefinition }) {
         const argList = this._convertArgListToQuery(args, { methodDefinition: options.methodDefinition })
-        return `query { ${options.moduleName} { ${options.methodName}${argList} } }`
+        const afterMethodName = [argList]
+
+        const returns = options.methodDefinition.returns
+        if (typeof returns !== 'string' || returns === 'void') {
+            afterMethodName.push(this._convertReturnValueToQuery(returns))
+        }
+
+        return `query { ${options.moduleName} { ${options.methodName}${afterMethodName.join(' ')} } }`
     }
 
     _convertArgListToQuery(args : any[], options : { methodDefinition : PublicMethodDefinition }) {
@@ -65,5 +74,19 @@ export class StorexGraphQLClient {
 
         const argList = argPairs.map(([key, value]) => `${key}: ${value}`).join(', ')
         return `(${argList})`
+    }
+
+    _convertReturnValueToQuery(returns : PublicMethodValue | 'void') {
+        if (returns === 'void') {
+            return '{ void }'
+        }
+
+        const detailedReturnValue = ensureDetailedPublicMethodValue(returns)
+        if (isPublicMethodCollectionType(detailedReturnValue.type)) {
+            const collectionDefinition = this.options.storageRegistry.collections[detailedReturnValue.type.collection]
+            const fieldNames = Object.keys(collectionDefinition.fields).join(', ')
+            return `{ ${fieldNames} }`
+        }
+        throw new Error(`Don't know how to consume method returning '${JSON.stringify(detailedReturnValue.type)}'`)
     }
 }

@@ -1,10 +1,14 @@
 import * as expect from 'expect'
 import { StorexGraphQLClient } from '.';
-import { StorageModule, StorageModuleConfig, StorageModuleInterface } from '@worldbrain/storex-pattern-modules';
+import { StorageRegistry } from '@worldbrain/storex';
+import { StorageModuleConfig, StorageModuleInterface, registerModuleMapCollections } from '@worldbrain/storex-pattern-modules';
 
 describe('StorexGraphQLClient', () => {
     async function setupTest(options : { modules : {[name : string] : StorageModuleInterface }, respond : (...args) => Promise<any>}) {
-        const client = new StorexGraphQLClient({ endpoint: null, fetch: true as any, modules: options.modules })
+        const storageRegistry = new StorageRegistry()
+        registerModuleMapCollections(storageRegistry, options.modules)
+
+        const client = new StorexGraphQLClient({ endpoint: null, fetch: true as any, modules: options.modules, storageRegistry })
         const queries = []
         client.executeQuery = async (...args) => {
             queries.push(args)
@@ -21,7 +25,7 @@ describe('StorexGraphQLClient', () => {
             return { json: async () => fakeResponse }
         }
         const endpoint = 'https://my.api/graphql';
-        const client = new StorexGraphQLClient({ endpoint: endpoint, fetch: fetch as any, modules: null })
+        const client = new StorexGraphQLClient({ endpoint: endpoint, fetch: fetch as any, modules: null, storageRegistry: null })
         const result = await client.executeQuery({query: '{ hello }'})
         expect(fetches).toEqual([
             [endpoint, {
@@ -41,17 +45,17 @@ describe('StorexGraphQLClient', () => {
             getConfig = () : StorageModuleConfig => ({
                 collections: { },
                 methods: {
-                    byName: { type: 'query', args: { name: 'string' }, returns: 'int' },
+                    testMethod: { type: 'query', args: { name: 'string' }, returns: 'int' },
                 }
             })
         }
         const { client, queries } = await setupTest({
             modules: { test: new TestModule() },
-            respond: async () => ({ data: { hello: 'world' } })
+            respond: async () => ({ data: 5 })
         })
-        const result = await client.getModules().test.byName({name: 'John'})
-        expect(queries).toEqual([[{ query: `query { test { byName(name: "John") } }` }]])
-        expect(result).toEqual({ hello: 'world' })
+        const result = await client.getModules().test.testMethod({name: 'John'})
+        expect(queries).toEqual([[{ query: `query { test { testMethod(name: "John") } }` }]])
+        expect(result).toEqual(5)
     })
 
     it('should correctly generate read-only queries with positional args', async () => {
@@ -59,24 +63,62 @@ describe('StorexGraphQLClient', () => {
             getConfig = () : StorageModuleConfig => ({
                 collections: { },
                 methods: {
-                    positionalTest: {
+                    testMethod: {
                         type: 'query',
                         args: {
                             first: { type: 'string', positional: true },
                             second: { type: 'string', positional: true },
                             third: { type: 'string' },
                         },
-                        returns: { array: 'string' },
+                        returns: 'int',
                     },
                 }
             })
         }
         const { client, queries } = await setupTest({
             modules: { test: new TestModule() },
-            respond: async () => ({ data: { hello: 'world' } })
+            respond: async () => ({ data: 5 })
         })
-        const result = await client.getModules().test.positionalTest('foo', 'bar', { third: 'eggs' })
-        expect(queries).toEqual([[{ query: `query { test { positionalTest(first: "foo", second: "bar", third: "eggs") } }` }]])
-        expect(result).toEqual({ hello: 'world' })
+        const result = await client.getModules().test.testMethod('foo', 'bar', { third: 'eggs' })
+        expect(queries).toEqual([[{ query: `query { test { testMethod(first: "foo", second: "bar", third: "eggs") } }` }]])
+        expect(result).toEqual(5)
     })
+
+    it('should correctly select a collection return value', async () => {
+        class TestModule implements StorageModuleInterface {
+            getConfig = () : StorageModuleConfig => ({
+                collections: {
+                    user: {
+                        version: new Date(),
+                        fields: {
+                            displayName: { type: 'string' },
+                            age: { type: 'int' },
+                        }
+                    }
+                },
+                methods: {
+                    testMethod: {
+                        type: 'query',
+                        args: {},
+                        returns: { collection: 'user' },
+                    },
+                }
+            })
+        }
+        const { client, queries } = await setupTest({
+            modules: { test: new TestModule() },
+            respond: async () => ({ data: { displayName: 'Joe', age: 30 } })
+        })
+        const result = await client.getModules().test.testMethod()
+        expect(queries).toEqual([[{ query: `query { test { testMethod { displayName, age, id } } }` }]])
+        expect(result).toEqual({ displayName: 'Joe', age: 30 })
+    })
+
+    it('should correctly select a collection array return value')
+
+    it('should correctly handle a scalar array return value')
+
+    it('should be able to pass collections as arguments')
+
+    it('should be able to consume methods returning void')
 })
