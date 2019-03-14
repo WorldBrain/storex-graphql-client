@@ -77,15 +77,15 @@ export class StorexGraphQLClient {
             const detailedArg = ensureDetailedPublicMethodValue(argDefinition) as PublicMethodDetailedArg
 
             let argValue : any
-            if (shouldBeVariableArgument(detailedArg)) {
-                argValue = `$${argName}`
-            } else {
+            if (!shouldBeVariableArgument(detailedArg)) {
                 if (detailedArg.positional) {
                     argValue = args.shift()
                 } else {
                     argValue = args[0][argName]
                 }
                 argValue = JSON.stringify(argValue)
+            } else {
+                argValue = `$${argName}`
             }
             argPairs.push([argName, argValue])
         }
