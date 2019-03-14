@@ -114,7 +114,41 @@ describe('StorexGraphQLClient', () => {
         expect(result).toEqual({ displayName: 'Joe', age: 30 })
     })
 
-    it('should correctly select a collection array return value')
+    it('should correctly select a collection array return value', async () => {
+        class TestModule implements StorageModuleInterface {
+            getConfig = () : StorageModuleConfig => ({
+                collections: {
+                    user: {
+                        version: new Date(),
+                        fields: {
+                            displayName: { type: 'string' },
+                            age: { type: 'int' },
+                        }
+                    }
+                },
+                methods: {
+                    testMethod: {
+                        type: 'query',
+                        args: {},
+                        returns: { array: { collection: 'user' } },
+                    },
+                }
+            })
+        }
+        const { client, queries } = await setupTest({
+            modules: { test: new TestModule() },
+            respond: async () => ({ data: [
+                { displayName: 'Joe', age: 30 },
+                { displayName: 'Bob', age: 40 },
+            ] })
+        })
+        const result = await client.getModules().test.testMethod()
+        expect(queries).toEqual([[{ query: `query { test { testMethod { displayName, age, id } } }` }]])
+        expect(result).toEqual([
+            { displayName: 'Joe', age: 30 },
+            { displayName: 'Bob', age: 40 },
+        ])
+    })
 
     it('should correctly handle a scalar array return value')
 

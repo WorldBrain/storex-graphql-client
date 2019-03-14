@@ -1,5 +1,5 @@
 import { StorageRegistry } from '@worldbrain/storex';
-import { StorageModuleInterface, PublicMethodDefinition, ensureDetailedPublicMethodValue, PublicMethodDetailedArg, PublicMethodValue, isPublicMethodCollectionType } from '@worldbrain/storex-pattern-modules'
+import { StorageModuleInterface, PublicMethodDefinition, ensureDetailedPublicMethodValue, PublicMethodDetailedArg, PublicMethodValue, isPublicMethodCollectionType, isPublicMethodArrayType } from '@worldbrain/storex-pattern-modules'
 
 export interface StorexGraphQLClientOptions {
     endpoint : string
@@ -81,7 +81,11 @@ export class StorexGraphQLClient {
             return '{ void }'
         }
 
-        const detailedReturnValue = ensureDetailedPublicMethodValue(returns)
+        let detailedReturnValue = ensureDetailedPublicMethodValue(returns)
+        if (isPublicMethodArrayType(detailedReturnValue.type)) {
+            detailedReturnValue = ensureDetailedPublicMethodValue(detailedReturnValue.type.array)
+        }
+
         if (isPublicMethodCollectionType(detailedReturnValue.type)) {
             const collectionDefinition = this.options.storageRegistry.collections[detailedReturnValue.type.collection]
             const fieldNames = Object.keys(collectionDefinition.fields).join(', ')
