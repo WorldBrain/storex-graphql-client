@@ -150,7 +150,23 @@ describe('StorexGraphQLClient', () => {
         ])
     })
 
-    it('should correctly handle a scalar array return value')
+    it('should correctly handle a scalar array return value', async () => {
+        class TestModule implements StorageModuleInterface {
+            getConfig = () : StorageModuleConfig => ({
+                collections: { },
+                methods: {
+                    testMethod: { type: 'query', args: { name: 'string' }, returns: { array: 'int' } },
+                }
+            })
+        }
+        const { client, queries } = await setupTest({
+            modules: { test: new TestModule() },
+            respond: async () => ({ data: { test: { testMethod: [5, 7, 3] } } })
+        })
+        const result = await client.getModules().test.testMethod({name: 'John'})
+        expect(queries).toEqual([[{ query: `query { test { testMethod(name: "John") } }` }]])
+        expect(result).toEqual([5, 7, 3])
+    })
 
     it('should be able to pass collections as arguments')
 

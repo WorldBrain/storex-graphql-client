@@ -47,9 +47,9 @@ export class StorexGraphQLClient {
         const argList = this._convertArgListToQuery(args, { methodDefinition: options.methodDefinition })
         const afterMethodName = [argList]
 
-        const returns = options.methodDefinition.returns
-        if (typeof returns !== 'string' || returns === 'void') {
-            afterMethodName.push(this._convertReturnValueToQuery(returns))
+        const returns = this._convertReturnValueToQuery(options.methodDefinition.returns)
+        if (returns) {
+            afterMethodName.push(returns)
         }
 
         return `query { ${options.moduleName} { ${options.methodName}${afterMethodName.join(' ')} } }`
@@ -84,6 +84,10 @@ export class StorexGraphQLClient {
         let detailedReturnValue = ensureDetailedPublicMethodValue(returns)
         if (isPublicMethodArrayType(detailedReturnValue.type)) {
             detailedReturnValue = ensureDetailedPublicMethodValue(detailedReturnValue.type.array)
+        }
+
+        if (typeof detailedReturnValue.type === 'string') {
+            return null
         }
 
         if (isPublicMethodCollectionType(detailedReturnValue.type)) {
