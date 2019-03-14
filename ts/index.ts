@@ -11,14 +11,14 @@ export class StorexGraphQLClient {
     constructor(private options : StorexGraphQLClientOptions) {
     }
 
-    async executeQuery(options : {query : string}) {
+    async executeRequest(options : { query : string, variables: {[name : string] : any}, type : 'query' }) {
         const response = await this.options.fetch(this.options.endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({query: options.query})
+            body: JSON.stringify({query: options.query, variables: options.variables})
         })
         return response.json()
     }
@@ -36,11 +36,26 @@ export class StorexGraphQLClient {
         for (const [methodName, methodDefinition] of Object.entries(this.options.modules[moduleName].getConfig().methods)) {
             methods[methodName] = async (...args) => {
                 const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition })
-                const response = await this.executeQuery({ query })
+                const variables = this._getCallVariables(args, { moduleName, methodName, methodDefinition })
+                const response = await this.executeRequest({ query, variables, type: 'query' })
                 return response['data'][moduleName][methodName]
             }
         }
         return methods as Module
+    }
+    _getCallVariables(args : any[], options : { moduleName : string, methodName : string, methodDefinition : PublicMethodDefinition }): any {
+        args = [...args]
+
+        const variables = {}
+        for (const [argName, argDefinition] of Object.entries(options.methodDefinition.args)) {
+            const detailedArg = ensureDetailedPublicMethodValue(argDefinition) as PublicMethodDetailedArg
+            const argValue = detailedArg.positional ? args.shift() : args[0][argName]
+
+            if (shouldBeVariableArgument(detailedArg)) {
+                variables[argName] = argValue
+            }
+        }
+        return variables
     }
 
     _convertCallToQuery(args : any[], options : { moduleName : string, methodName : string, methodDefinition : PublicMethodDefinition }) {
@@ -56,17 +71,23 @@ export class StorexGraphQLClient {
     }
 
     _convertArgListToQuery(args : any[], options : { methodDefinition : PublicMethodDefinition }) {
+        args = [...args]
         const argPairs : [any, any][] = []
         for (const [argName, argDefinition] of Object.entries(options.methodDefinition.args)) {
             const detailedArg = ensureDetailedPublicMethodValue(argDefinition) as PublicMethodDetailedArg
 
             let argValue : any
-            if (detailedArg.positional) {
-                argValue = args.shift()
+            if (shouldBeVariableArgument(detailedArg)) {
+                argValue = `$${argName}`
             } else {
-                argValue = args[0][argName]
+                if (detailedArg.positional) {
+                    argValue = args.shift()
+                } else {
+                    argValue = args[0][argName]
+                }
+                argValue = JSON.stringify(argValue)
             }
-            argPairs.push([argName, JSON.stringify(argValue)])
+            argPairs.push([argName, argValue])
         }
         if (!argPairs.length) {
             return ''
@@ -97,4 +118,11 @@ export class StorexGraphQLClient {
         }
         throw new Error(`Don't know how to consume method returning '${JSON.stringify(detailedReturnValue.type)}'`)
     }
+}
+
+function shouldBeVariableArgument(detailedArg : PublicMethodDetailedArg) {
+    return (
+        isPublicMethodCollectionType(detailedArg.type) ||
+        (isPublicMethodArrayType(detailedArg.type) && isPublicMethodCollectionType(detailedArg.type.array))
+    )
 }
