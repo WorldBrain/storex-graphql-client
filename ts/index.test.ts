@@ -17,13 +17,14 @@ describe('StorexGraphQLClient', () => {
         return { client, queries }
     }
 
-    async function runTest(options : {
+    interface TestOptions {
         collections : StorageModuleCollections,
         methodDefinition : PublicMethodDefinition,
         methodImplementation : (...args) => Promise<any>,
         callArgs : any[]
         expectedQuery : any
-    }) {
+    }
+    async function runTest(options : TestOptions) {
         class TestModule implements StorageModuleInterface {
             getConfig = () : StorageModuleConfig => ({
                 collections: options.collections,
@@ -65,18 +66,15 @@ describe('StorexGraphQLClient', () => {
         expect(result).toEqual(fakeResponse)
     })
 
-    it('should correctly generate read-only queries', async () => {
-        await runTest({
+    const TESTS : {[description : string] : TestOptions} = {
+        'should correctly generate read-only queries': {
             collections: {},
             methodDefinition: { type: 'query', args: { name: 'string' }, returns: 'int' },
             methodImplementation: async () => 5,
             callArgs: [{name: 'John'}],
             expectedQuery: { query: `{ test { testMethod(name: "John") } }`, variables: {}, type: 'query' }
-        })
-    })
-
-    it('should correctly generate read-only queries with positional args', async () => {
-        await runTest({
+        },
+        'should correctly generate read-only queries with positional args': {
             collections: {},
             methodDefinition: {
                 type: 'query',
@@ -90,11 +88,8 @@ describe('StorexGraphQLClient', () => {
             methodImplementation: async () => 5,
             callArgs: ['foo', 'bar', { third: 'eggs' }],
             expectedQuery: { query: `{ test { testMethod(first: "foo", second: "bar", third: "eggs") } }`, variables: {}, type: 'query' }
-        })
-    })
-
-    it('should correctly select a collection return value', async () => {
-        await runTest({
+        },
+        'should correctly select a collection return value': {
             collections: {
                 user: {
                     version: new Date(),
@@ -108,11 +103,8 @@ describe('StorexGraphQLClient', () => {
             methodImplementation: async () => ({ displayName: 'Joe', age: 30 }),
             callArgs: [],
             expectedQuery: { query: `{ test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }
-        })
-    })
-
-    it('should correctly select a collection array return value', async () => {
-        await runTest({
+        },
+        'should correctly select a collection array return value': {
             collections: {
                 user: {
                     version: new Date(),
@@ -129,31 +121,22 @@ describe('StorexGraphQLClient', () => {
             ],
             callArgs: [],
             expectedQuery: { query: `{ test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }
-        })
-    })
-
-    it('should correctly handle a scalar array return value', async () => {
-        await runTest({
+        },
+        'should correctly handle a scalar array return value': {
             collections: {},
             methodDefinition: { type: 'query', args: { name: 'string' }, returns: { array: 'int' } },
             methodImplementation: async () => [5, 7, 3],
             callArgs: [{name: 'John'}],
             expectedQuery: { query: `{ test { testMethod(name: "John") } }`, variables: {}, type: 'query' }
-        })
-    })
-
-    it('should correctly handle void return values', async () => {
-        await runTest({
+        },
+        'should correctly handle void return values': {
             collections: {},
             methodDefinition: { type: 'query', args: { name: 'string' }, returns: 'void' },
             methodImplementation: async () => null,
             callArgs: [{ name: 'John' }],
             expectedQuery: { query: `{ test { testMethod(name: "John") { void } } }`, variables: {}, type: 'query' }
-        })
-    })
-
-    it('should be able to pass collections as arguments', async () => {
-        await runTest({
+        },
+        'should correctly pass collections in as arguments': {
             collections: {
                 user: {
                     version: new Date(),
@@ -175,11 +158,8 @@ describe('StorexGraphQLClient', () => {
                 variables: { user: { displayName: 'Joe', age: 30 } },
                 type: 'query',
             }
-        })
-    })
-
-    it('should be able to pass collection arrays as arguments', async () => {
-        await runTest({
+        },
+        'should correctly pass collection arrays as arguments': {
             collections: {
                 user: {
                     version: new Date(),
@@ -207,16 +187,19 @@ describe('StorexGraphQLClient', () => {
                 ] },
                 type: 'query',
             }
-        })
-    })
-
-    it('should be able to execute mutations', async () => {
-        await runTest({
+        },
+        'should be able to execute mutations': {
             collections: {},
             methodDefinition: { type: 'mutation', args: { name: 'string' }, returns: 'void' },
             methodImplementation: async () => null,
             callArgs: [{ name: 'John' }],
             expectedQuery: { query: `mutation { test { testMethod(name: "John") { void } } }`, variables: {}, type: 'mutation' }
+        }
+    }
+
+    for (const [description, options] of Object.entries(TESTS)) {
+        it(description, async () => {
+            await runTest(options)
         })
-    })
+    }
 })
