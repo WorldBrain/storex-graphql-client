@@ -23,6 +23,14 @@ export class StorexGraphQLClient {
         return response.json()
     }
 
+    async executeCall(moduleName : string, methodName : string, args : any[]) {
+        const methodDefinition = this.options.modules[moduleName].getConfig().methods[methodName]
+        const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition })
+        const variables = this._getCallVariables(args, { moduleName, methodName, methodDefinition })
+        const response = await this.executeRequest({ query, variables, type: methodDefinition.type })
+        return response['data'][moduleName][methodName]
+    }
+
     getModules<Modules = {[module : string] : {[name : string] : (...args) => Promise<any>}}>() : Modules {
         const modules = {}
         for (const name of Object.keys(this.options.modules)) {
@@ -33,12 +41,9 @@ export class StorexGraphQLClient {
 
     getModule<Module = {[name : string] : (...args) => Promise<any>}>(moduleName : string) {
         const methods = {}
-        for (const [methodName, methodDefinition] of Object.entries(this.options.modules[moduleName].getConfig().methods)) {
+        for (const methodName of Object.keys(this.options.modules[moduleName].getConfig().methods)) {
             methods[methodName] = async (...args) => {
-                const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition })
-                const variables = this._getCallVariables(args, { moduleName, methodName, methodDefinition })
-                const response = await this.executeRequest({ query, variables, type: methodDefinition.type })
-                return response['data'][moduleName][methodName]
+                return this.executeCall(moduleName, methodName, args)
             }
         }
         return methods as Module

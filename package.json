@@ -1,7 +1,7 @@
 {
   "name": "@worldbrain/storex-graphql-client",
   "version": "0.1.0",
-  "description": "GraphQL clients for schemas generated automatically for Storex modules",
+  "description": "GraphQL client for schemas generated automatically for Storex modules",
   "main": "lib/index.js",
   "typings": "lib/index",
   "scripts": {
