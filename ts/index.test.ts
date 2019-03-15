@@ -54,7 +54,7 @@ describe('StorexGraphQLClient', () => {
             respond: async () => ({ data: { test: { testMethod: 5 } } })
         })
         const result = await client.getModules().test.testMethod({name: 'John'})
-        expect(queries).toEqual([[{ query: `query { test { testMethod(name: "John") } }`, variables: {}, type: 'query' }]])
+        expect(queries).toEqual([[{ query: `{ test { testMethod(name: "John") } }`, variables: {}, type: 'query' }]])
         expect(result).toEqual(5)
     })
 
@@ -81,7 +81,7 @@ describe('StorexGraphQLClient', () => {
         })
         const result = await client.getModules().test.testMethod('foo', 'bar', { third: 'eggs' })
         expect(queries).toEqual([[{
-            query: `query { test { testMethod(first: "foo", second: "bar", third: "eggs") } }`,
+            query: `{ test { testMethod(first: "foo", second: "bar", third: "eggs") } }`,
             variables: {}, type: 'query'
         }]])
         expect(result).toEqual(5)
@@ -113,7 +113,7 @@ describe('StorexGraphQLClient', () => {
             respond: async () => ({ data: { test: { testMethod: { displayName: 'Joe', age: 30 } } } })
         })
         const result = await client.getModules().test.testMethod()
-        expect(queries).toEqual([[{ query: `query { test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }]])
+        expect(queries).toEqual([[{ query: `{ test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }]])
         expect(result).toEqual({ displayName: 'Joe', age: 30 })
     })
 
@@ -146,7 +146,7 @@ describe('StorexGraphQLClient', () => {
             ] } } })
         })
         const result = await client.getModules().test.testMethod()
-        expect(queries).toEqual([[{ query: `query { test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }]])
+        expect(queries).toEqual([[{ query: `{ test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }]])
         expect(result).toEqual([
             { displayName: 'Joe', age: 30 },
             { displayName: 'Bob', age: 40 },
@@ -166,9 +166,27 @@ describe('StorexGraphQLClient', () => {
             modules: { test: new TestModule() },
             respond: async () => ({ data: { test: { testMethod: [5, 7, 3] } } })
         })
-        const result = await client.getModules().test.testMethod({name: 'John'})
-        expect(queries).toEqual([[{ query: `query { test { testMethod(name: "John") } }`, variables: {}, type: 'query' }]])
+        const result = await client.getModules().test.testMethod({ name: 'John' })
+        expect(queries).toEqual([[{ query: `{ test { testMethod(name: "John") } }`, variables: {}, type: 'query' }]])
         expect(result).toEqual([5, 7, 3])
+    })
+
+    it('should correctly handle void return values', async () => {
+        class TestModule implements StorageModuleInterface {
+            getConfig = () : StorageModuleConfig => ({
+                collections: { },
+                methods: {
+                    testMethod: { type: 'query', args: { name: 'string' }, returns: 'void' },
+                }
+            })
+        }
+        const { client, queries } = await setupTest({
+            modules: { test: new TestModule() },
+            respond: async () => ({ data: { test: { testMethod: null } } })
+        })
+        const result = await client.getModules().test.testMethod({ name: 'John' })
+        expect(queries).toEqual([[{ query: `{ test { testMethod(name: "John") { void } } }`, variables: {}, type: 'query' }]])
+        expect(result).toEqual(null)
     })
 
     it('should be able to pass collections as arguments', async () => {
@@ -198,7 +216,7 @@ describe('StorexGraphQLClient', () => {
         })
         const result = await client.getModules().test.testMethod({ user: { displayName: 'Joe', age: 30 } })
         expect(queries).toEqual([[{
-            query: `query { test { testMethod(user: $user) } }`,
+            query: `{ test { testMethod(user: $user) } }`,
             variables: { user: { displayName: 'Joe', age: 30 } },
             type: 'query',
         }]])
@@ -235,7 +253,7 @@ describe('StorexGraphQLClient', () => {
             { displayName: 'Bob', age: 40 },
         ] })
         expect(queries).toEqual([[{
-            query: `query { test { testMethod(users: $users) } }`,
+            query: `{ test { testMethod(users: $users) } }`,
             variables: { users: [
                 { displayName: 'Joe', age: 30 },
                 { displayName: 'Bob', age: 40 },
@@ -245,7 +263,21 @@ describe('StorexGraphQLClient', () => {
         expect(result).toEqual(5)
     })
 
-    it('should be able to consume methods returning void')
-
-    it('should be able to execute mutations')
+    it('should be able to execute mutations', async () => {
+        class TestModule implements StorageModuleInterface {
+            getConfig = () : StorageModuleConfig => ({
+                collections: { },
+                methods: {
+                    testMethod: { type: 'mutation', args: { name: 'string' }, returns: 'void' },
+                }
+            })
+        }
+        const { client, queries } = await setupTest({
+            modules: { test: new TestModule() },
+            respond: async () => ({ data: { test: { testMethod: null } } })
+        })
+        const result = await client.getModules().test.testMethod({ name: 'John' })
+        expect(queries).toEqual([[{ query: `mutation { test { testMethod(name: "John") { void } } }`, variables: {}, type: 'mutation' }]])
+        expect(result).toEqual(null)
+    })
 })

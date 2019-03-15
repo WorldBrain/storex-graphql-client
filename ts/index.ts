@@ -11,7 +11,7 @@ export class StorexGraphQLClient {
     constructor(private options : StorexGraphQLClientOptions) {
     }
 
-    async executeRequest(options : { query : string, variables: {[name : string] : any}, type : 'query' }) {
+    async executeRequest(options : { query : string, variables: {[name : string] : any}, type : 'query' | 'mutation' }) {
         const response = await this.options.fetch(this.options.endpoint, {
             method: 'POST',
             headers: {
@@ -37,7 +37,7 @@ export class StorexGraphQLClient {
             methods[methodName] = async (...args) => {
                 const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition })
                 const variables = this._getCallVariables(args, { moduleName, methodName, methodDefinition })
-                const response = await this.executeRequest({ query, variables, type: 'query' })
+                const response = await this.executeRequest({ query, variables, type: methodDefinition.type })
                 return response['data'][moduleName][methodName]
             }
         }
@@ -67,7 +67,9 @@ export class StorexGraphQLClient {
             afterMethodName.push(returns)
         }
 
-        return `query { ${options.moduleName} { ${options.methodName}${afterMethodName.join(' ')} } }`
+        const type = options.methodDefinition.type === 'mutation' ? 'mutation ' : ''
+
+        return `${type}{ ${options.moduleName} { ${options.methodName}${afterMethodName.join(' ')} } }`
     }
 
     _convertArgListToQuery(args : any[], options : { methodDefinition : PublicMethodDefinition }) {
