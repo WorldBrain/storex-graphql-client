@@ -31,16 +31,20 @@
     "@types/node": "^10.12.11",
     "@worldbrain/storex-backend-dexie": "^0.2.2",
     "@worldbrain/storex-graphql-schema": "^0.1.0",
+    "apollo-server-express": "^2.4.8",
     "chai": "^4.1.2",
     "expect": "^23.5.0",
+    "express": "^4.16.4",
     "fake-indexeddb": "^2.0.4",
+    "graphql": "^14.1.1",
     "graphql-errors": "^2.1.0",
     "mocha": "^4.0.1",
     "sinon": "^4.1.2",
+    "supertest": "^4.0.0",
     "ts-node": "^7.0.1",
     "typescript": "^3.0.1"
   },
   "resolutions": {
-    "**/graphql": "^14.0.0"
+    "**/graphql": "^14.1.1"
   }
 }

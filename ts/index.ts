@@ -28,6 +28,9 @@ export class StorexGraphQLClient {
         const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition })
         const variables = this._getCallVariables(args, { moduleName, methodName, methodDefinition })
         const response = await this.executeRequest({ query, variables, type: methodDefinition.type })
+        if (response['errors']) {
+            throw new Error(`GraphQL error(s): ${JSON.stringify(response.errors.map(e => e.message))}`)
+        }
         return response['data'][moduleName][methodName]
     }
 

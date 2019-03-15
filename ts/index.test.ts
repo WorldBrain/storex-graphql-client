@@ -1,46 +1,112 @@
 import * as expect from 'expect'
+import * as graphql from 'graphql'
+import * as express from 'express'
+import * as bodyParser from 'body-parser'
+import * as superTest from 'supertest'
+import { ApolloServer } from 'apollo-server-express'
+import { maskErrors } from 'graphql-errors'
 import { StorexGraphQLClient } from '.';
-import { StorageRegistry, CollectionDefinitionMap } from '@worldbrain/storex';
-import { StorageModuleConfig, StorageModuleInterface, registerModuleMapCollections, PublicMethodDefinitions, PublicMethodDefinition, StorageModuleCollections } from '@worldbrain/storex-pattern-modules';
+import StorageManager, { StorageRegistry } from '@worldbrain/storex';
+import { StorageModuleConfig, StorageModuleInterface, registerModuleMapCollections, PublicMethodDefinition, StorageModuleCollections, StorageModule } from '@worldbrain/storex-pattern-modules';
+import { setupStorexTest } from '@worldbrain/storex-pattern-modules/lib/index.tests';
+import { createStorexGraphQLSchema } from '@worldbrain/storex-graphql-schema/lib/modules'
 
 describe('StorexGraphQLClient', () => {
-    async function setupTest(options : { modules : {[name : string] : StorageModuleInterface }, respond : (...args) => Promise<any>}) {
+    async function setupTest(options : { modules : {[name : string] : StorageModuleInterface }, respond? : (...args) => Promise<any>, fetch? : (...args) => Promise<any>}) {
         const storageRegistry = new StorageRegistry()
         registerModuleMapCollections(storageRegistry, options.modules)
 
-        const client = new StorexGraphQLClient({ endpoint: null, fetch: true as any, modules: options.modules, storageRegistry })
+        const client = new StorexGraphQLClient({ endpoint: null, fetch: options.fetch, modules: options.modules, storageRegistry })
         const queries = []
-        client.executeRequest = async (...args) => {
-            queries.push(args)
-            return options.respond(args)
+        if (options.respond) {
+            client.executeRequest = async (...args) => {
+                queries.push(args)
+                return options.respond(args)
+            }
         }
         return { client, queries }
     }
 
-    interface TestOptions {
+    interface MethodTestOptions {
         collections : StorageModuleCollections,
         methodDefinition : PublicMethodDefinition,
         methodImplementation : (...args) => Promise<any>,
         callArgs : any[]
         expectedQuery : any
     }
-    async function runTest(options : TestOptions) {
-        class TestModule implements StorageModuleInterface {
-            getConfig = () : StorageModuleConfig => ({
-                collections: options.collections,
-                methods: {
-                    testMethod: options.methodDefinition,
+    async function setupMethodTest(options : MethodTestOptions & { setupServerModules? : boolean }) {
+        let serverInfo = { lastMethodReponse: null }
+
+        const moduleConfig = {
+            collections: options.collections,
+            methods: {
+                testMethod: options.methodDefinition,
+            }
+        }
+        class ClientTestModule implements StorageModuleInterface {
+            getConfig = () : StorageModuleConfig => moduleConfig
+        }
+        class ServerTestModule extends StorageModule {
+            getConfig = () : StorageModuleConfig => moduleConfig
+
+            async testMethod(...args) {
+                return serverInfo.lastMethodReponse = await options.methodImplementation(...args)
+            }
+        }
+
+        let storageManager : StorageManager = null
+        let serverModules : {[name : string] : StorageModule} = null
+        if (options.setupServerModules) {
+            const serverTestSetup = await setupStorexTest<{test : ServerTestModule}>({
+                collections: {},
+                modules: {
+                    test: ({storageManager}) => new ServerTestModule({storageManager})
                 }
             })
+            storageManager = serverTestSetup.storageManager
+            serverModules = serverTestSetup.modules
         }
+        
+        return { clientModules: { test: new ClientTestModule() }, storageManager, serverModules, serverInfo }
+    }
+    async function runMethodUnitTest(options : MethodTestOptions) {
+        const { clientModules: modules } = await setupMethodTest(options)
         let expectedResponse
         const { client, queries } = await setupTest({
-            modules: { test: new TestModule() },
+            modules: modules,
             respond: async (...args) => ({ data: { test: { testMethod: (expectedResponse = await options.methodImplementation(...args)) } } })
         })
         const result = await client.getModules().test.testMethod(...options.callArgs)
         expect(queries).toEqual([[options.expectedQuery]])
         expect(result).toEqual(expectedResponse)
+    }
+
+    async function runMethodIntegrationTest(options : MethodTestOptions) {
+        const { storageManager, serverModules, serverInfo, clientModules } = await setupMethodTest({ ...options, setupServerModules: true })
+        
+        const schema = createStorexGraphQLSchema(serverModules, {storageManager, autoPkType: 'int', graphql})
+        const app = express()
+        const server = new ApolloServer({ schema })
+        app.use(bodyParser.json())
+        server.applyMiddleware({ app, path: '/graphql' })
+
+        const { client } = await setupTest({ modules: clientModules, fetch: async (url, options) => {
+            try {
+                const response = await superTest(app).post('/graphql')
+                    .set(options.headers)
+                    .send(options.body)
+                return { json: async () => {
+                    return response.body
+                } }
+            } catch (e) {
+                if (e.response.body.errors) {
+                    return { json: async () => e.response.body }
+                }
+                throw e
+            }
+        } })
+        const result = await client.getModules().test.testMethod(...options.callArgs)
+        expect(result).toEqual(serverInfo.lastMethodReponse)
     }
 
     it('should correctly execute queries', async () => {
@@ -66,7 +132,7 @@ describe('StorexGraphQLClient', () => {
         expect(result).toEqual(fakeResponse)
     })
 
-    const TESTS : {[description : string] : TestOptions} = {
+    const TESTS : {[description : string] : MethodTestOptions} = {
         'should correctly generate read-only queries': {
             collections: {},
             methodDefinition: { type: 'query', args: { name: 'string' }, returns: 'int' },
@@ -100,7 +166,7 @@ describe('StorexGraphQLClient', () => {
                 }
             },
             methodDefinition: { type: 'query', args: {}, returns: { collection: 'user' }, },
-            methodImplementation: async () => ({ displayName: 'Joe', age: 30 }),
+            methodImplementation: async () => ({ displayName: 'Joe', age: 30, id: 55 }),
             callArgs: [],
             expectedQuery: { query: `{ test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }
         },
@@ -116,8 +182,8 @@ describe('StorexGraphQLClient', () => {
             },
             methodDefinition: { type: 'query', args: {}, returns: { array: { collection: 'user' } }, },
             methodImplementation: async () => [
-                { displayName: 'Joe', age: 30 },
-                { displayName: 'Bob', age: 40 },
+                { displayName: 'Joe', age: 30, id: 22 },
+                { displayName: 'Bob', age: 40, id: 21 },
             ],
             callArgs: [],
             expectedQuery: { query: `{ test { testMethod { displayName, age, id } } }`, variables: {}, type: 'query' }
@@ -154,7 +220,7 @@ describe('StorexGraphQLClient', () => {
             methodImplementation: async () => 5,
             callArgs: [{ user: { displayName: 'Joe', age: 30 } }],
             expectedQuery: {
-                query: `{ test { testMethod(user: $user) } }`,
+                query: `query MethodCall($user: User) { test { testMethod(user: $user) } }`,
                 variables: { user: { displayName: 'Joe', age: 30 } },
                 type: 'query',
             }
@@ -180,7 +246,7 @@ describe('StorexGraphQLClient', () => {
                 { displayName: 'Bob', age: 40 },
             ] }],
             expectedQuery: {
-                query: `{ test { testMethod(users: $users) } }`,
+                query: `query MethodCall($users: [User!]) { test { testMethod(users: $users) } }`,
                 variables: { users: [
                     { displayName: 'Joe', age: 30 },
                     { displayName: 'Bob', age: 40 },
@@ -198,8 +264,13 @@ describe('StorexGraphQLClient', () => {
     }
 
     for (const [description, options] of Object.entries(TESTS)) {
-        it(description, async () => {
-            await runTest(options)
+        describe(description, () => {
+            it('unit test', async () => {
+                await runMethodUnitTest(options)
+            })
+            it('integration test', async () => {
+                await runMethodIntegrationTest(options)
+            })
         })
     }
 })
