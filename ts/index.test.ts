@@ -238,7 +238,7 @@ describe('StorexGraphQLClient', () => {
             methodDefinition: {
                 type: 'query',
                 args: { users: { array: { collection: 'user' } } },
-                returns: 'string',
+                returns: 'int',
             },
             methodImplementation: async () => 5,
             callArgs: [{ users: [
@@ -246,7 +246,7 @@ describe('StorexGraphQLClient', () => {
                 { displayName: 'Bob', age: 40 },
             ] }],
             expectedQuery: {
-                query: `query MethodCall($users: [User!]) { test { testMethod(users: $users) } }`,
+                query: `query MethodCall($users: [UserInput!]!) { test { testMethod(users: $users) } }`,
                 variables: { users: [
                     { displayName: 'Joe', age: 30 },
                     { displayName: 'Bob', age: 40 },

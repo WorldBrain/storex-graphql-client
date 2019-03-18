@@ -94,14 +94,25 @@ export class StorexGraphQLClient {
         return `${type} ${queryArgs}{ ${options.moduleName} { ${options.methodName}${afterMethodName.join(' ')} } }`
     }
 
-    _convertSchemaArgToGraphQL(value : PublicMethodValue): any {
-        const detailedValue = ensureDetailedPublicMethodValue(value)
+    _convertSchemaArgToGraphQL(arg : PublicMethodValue): any {
+        const detailedArg = ensureDetailedPublicMethodValue(arg)
 
         let typeString
-        if (isPublicMethodCollectionType(detailedValue.type)) {
-            typeString = capitalize(detailedValue.type.collection) + 'Input'
+        if (isPublicMethodCollectionType(detailedArg.type)) {
+            typeString = capitalize(detailedArg.type.collection) + 'Input'
+        } else if (isPublicMethodArrayType(detailedArg.type)) {
+            const detailedArrayValue = ensureDetailedPublicMethodValue(detailedArg.type.array)
+
+            let valueTypeString
+            if (isPublicMethodCollectionType(detailedArrayValue.type)) {
+                valueTypeString = capitalize(detailedArrayValue.type.collection) + 'Input'
+            }
+            if (!detailedArrayValue.optional) {
+                valueTypeString += '!'
+            }
+            typeString = `[${valueTypeString}]`            
         }
-        if (!detailedValue.optional) {
+        if (!detailedArg.optional) {
             typeString += '!'
         }
 
