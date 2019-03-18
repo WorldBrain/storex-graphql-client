@@ -6,7 +6,9 @@ import * as superTest from 'supertest'
 import { ApolloServer } from 'apollo-server-express'
 import { StorexGraphQLClient } from '.';
 import StorageManager, { StorageRegistry } from '@worldbrain/storex';
-import { StorageModuleConfig, StorageModuleInterface, registerModuleMapCollections, PublicMethodDefinition, StorageModuleCollections, StorageModule } from '@worldbrain/storex-pattern-modules';
+import {
+    StorageModuleConfig, StorageModuleInterface, StorageModule, registerModuleMapCollections,
+    PublicMethodDefinition, StorageModuleCollections } from '@worldbrain/storex-pattern-modules';
 import { setupStorexTest } from '@worldbrain/storex-pattern-modules/lib/index.tests';
 import { createStorexGraphQLSchema } from '@worldbrain/storex-graphql-schema/lib/modules'
 
@@ -30,6 +32,7 @@ describe('StorexGraphQLClient', () => {
         collections : StorageModuleCollections,
         methodDefinition : PublicMethodDefinition,
         methodImplementation : (...args) => Promise<any>,
+        otherMethods? : {[name : string] : {definition : PublicMethodDefinition, implementation : (...args) => Promise<any>}}
         callArgs : any[]
         expectedQuery : any
     }
@@ -42,6 +45,12 @@ describe('StorexGraphQLClient', () => {
                 testMethod: options.methodDefinition,
             }
         }
+        if (options.otherMethods) {
+            for (const [methodName, { definition }] of Object.entries(options.otherMethods)) {
+                moduleConfig.methods[methodName] = definition
+            }
+        }
+
         class ClientTestModule implements StorageModuleInterface {
             getConfig = () : StorageModuleConfig => moduleConfig
         }
@@ -50,6 +59,11 @@ describe('StorexGraphQLClient', () => {
 
             async testMethod(...args) {
                 return serverInfo.lastMethodReponse = await options.methodImplementation(...args)
+            }
+        }
+        if (options.otherMethods) {
+            for (const [methodName, { implementation }] of Object.entries(options.otherMethods)) {
+                ServerTestModule.prototype[methodName] = implementation
             }
         }
 
@@ -84,7 +98,6 @@ describe('StorexGraphQLClient', () => {
         const { storageManager, serverModules, serverInfo, clientModules } = await setupMethodTest({ ...options, setupServerModules: true })
         
         const schema = createStorexGraphQLSchema(serverModules, {storageManager, autoPkType: 'int', graphql})
-        // console.log(graphql.printSchema(schema))
         const app = express()
         const server = new ApolloServer({ schema })
         app.use(bodyParser.json())
@@ -258,6 +271,12 @@ describe('StorexGraphQLClient', () => {
             collections: {},
             methodDefinition: { type: 'mutation', args: { name: 'string' }, returns: 'void' },
             methodImplementation: async () => null,
+            otherMethods: {
+                dummy: {
+                    definition: { type: 'query', args: {}, returns: 'int' },
+                    implementation: async () => 5,
+                }
+            },
             callArgs: [{ name: 'John' }],
             expectedQuery: { query: `mutation { test { testMethod(name: "John") { void } } }`, variables: {}, type: 'mutation' }
         }
