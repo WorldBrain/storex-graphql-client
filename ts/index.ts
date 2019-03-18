@@ -1,5 +1,6 @@
 import { StorageRegistry } from '@worldbrain/storex';
 import { StorageModuleInterface, PublicMethodDefinition, ensureDetailedPublicMethodValue, PublicMethodDetailedArg, PublicMethodValue, isPublicMethodCollectionType, isPublicMethodArrayType } from '@worldbrain/storex-pattern-modules'
+import { capitalize } from './utils';
 
 export interface StorexGraphQLClientOptions {
     endpoint : string
@@ -7,6 +8,7 @@ export interface StorexGraphQLClientOptions {
     storageRegistry : StorageRegistry
     fetch? : typeof fetch
 }
+type CallVariables = {[key : string] : any}
 export class StorexGraphQLClient {
     constructor(private options : StorexGraphQLClientOptions) {
     }
@@ -25,8 +27,8 @@ export class StorexGraphQLClient {
 
     async executeCall(moduleName : string, methodName : string, args : any[]) {
         const methodDefinition = this.options.modules[moduleName].getConfig().methods[methodName]
-        const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition })
         const variables = this._getCallVariables(args, { moduleName, methodName, methodDefinition })
+        const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition, variables })
         const response = await this.executeRequest({ query, variables, type: methodDefinition.type })
         if (response['errors']) {
             throw new Error(`GraphQL error(s): ${JSON.stringify(response.errors.map(e => e.message))}`)
@@ -51,7 +53,10 @@ export class StorexGraphQLClient {
         }
         return methods as Module
     }
-    _getCallVariables(args : any[], options : { moduleName : string, methodName : string, methodDefinition : PublicMethodDefinition }): any {
+
+    _getCallVariables(args : any[], options : {
+        moduleName : string, methodName : string, methodDefinition : PublicMethodDefinition
+    }): CallVariables {
         args = [...args]
 
         const variables = {}
@@ -66,7 +71,9 @@ export class StorexGraphQLClient {
         return variables
     }
 
-    _convertCallToQuery(args : any[], options : { moduleName : string, methodName : string, methodDefinition : PublicMethodDefinition }) {
+    _convertCallToQuery(args : any[], options : {
+        moduleName : string, methodName : string, methodDefinition : PublicMethodDefinition, variables : CallVariables
+    }) {
         const argList = this._convertArgListToQuery(args, { methodDefinition: options.methodDefinition })
         const afterMethodName = [argList]
 
@@ -75,9 +82,30 @@ export class StorexGraphQLClient {
             afterMethodName.push(returns)
         }
 
-        const type = options.methodDefinition.type === 'mutation' ? 'mutation ' : ''
+        let queryArgs = ''
+        if (Object.keys(options.variables).length) {
+            const variableStrings = Object.keys(options.variables).map(
+                varName => `$${varName}: ${this._convertSchemaArgToGraphQL(options.methodDefinition.args[varName])}`
+            )
+            queryArgs = `MethodCall(${variableStrings}) `
+        }
 
-        return `${type}{ ${options.moduleName} { ${options.methodName}${afterMethodName.join(' ')} } }`
+        const type = options.methodDefinition.type
+        return `${type} ${queryArgs}{ ${options.moduleName} { ${options.methodName}${afterMethodName.join(' ')} } }`
+    }
+
+    _convertSchemaArgToGraphQL(value : PublicMethodValue): any {
+        const detailedValue = ensureDetailedPublicMethodValue(value)
+
+        let typeString
+        if (isPublicMethodCollectionType(detailedValue.type)) {
+            typeString = capitalize(detailedValue.type.collection) + 'Input'
+        }
+        if (!detailedValue.optional) {
+            typeString += '!'
+        }
+
+        return typeString
     }
 
     _convertArgListToQuery(args : any[], options : { methodDefinition : PublicMethodDefinition }) {
