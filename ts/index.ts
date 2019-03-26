@@ -1,31 +1,40 @@
 import { StorageRegistry } from '@worldbrain/storex';
 import { StorageModuleInterface, PublicMethodDefinition, ensureDetailedPublicMethodValue, PublicMethodDetailedArg, PublicMethodValue, isPublicMethodCollectionType, isPublicMethodArrayType } from '@worldbrain/storex-pattern-modules'
 import { capitalize } from './utils';
+import { StorexGraphQLClientLogEvent as StorexGraphQLClientObserverEvent } from './types';
 
 export interface StorexGraphQLClientOptions {
     endpoint : string
     modules : {[name : string]: StorageModuleInterface}
     storageRegistry : StorageRegistry
     fetch? : typeof fetch
+    observer? : (event : StorexGraphQLClientObserverEvent) => void
 }
+
 type CallVariables = {[key : string] : any}
 export class StorexGraphQLClient {
     constructor(private options : StorexGraphQLClientOptions) {
     }
 
     async executeRequest(options : { query : string, variables: {[name : string] : any}, type : 'query' | 'mutation' }) {
+        const body = JSON.stringify({ query: options.query, variables: options.variables })
+        this._log({ type: 'request-prepared', query: options.query, variables: options.variables, body })
         const response = await this.options.fetch(this.options.endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({query: options.query, variables: options.variables})
+            body: body
         })
-        return response.json()
+        const parsedBody = await response.json()
+        this._log({ type: 'response-received', parsedBody })
+        return parsedBody
     }
 
     async executeCall(moduleName : string, methodName : string, args : any[]) {
+        this._log({ type: 'preparing-request', module: moduleName, method: methodName, args})
+
         const methodDefinition = this.options.modules[moduleName].getConfig().methods[methodName]
         const variables = this._getCallVariables(args, { moduleName, methodName, methodDefinition })
         const query = this._convertCallToQuery(args, { moduleName, methodName, methodDefinition, variables })
@@ -33,7 +42,9 @@ export class StorexGraphQLClient {
         if (response['errors']) {
             throw new Error(`GraphQL error(s): ${JSON.stringify(response.errors.map(e => e.message))}`)
         }
-        return response['data'][moduleName][methodName]
+        const returnValue = response['data'][moduleName][methodName]
+        this._log({ type: 'call-processed', module: moduleName, method: methodName, args, returnValue})
+        return returnValue
     }
 
     getModules<Modules = {[module : string] : {[name : string] : (...args) => Promise<any>}}>() : Modules {
@@ -64,7 +75,7 @@ export class StorexGraphQLClient {
             const detailedArg = ensureDetailedPublicMethodValue(argDefinition) as PublicMethodDetailedArg
             const argValue = detailedArg.positional ? args.shift() : args[0][argName]
 
-            if (shouldBeVariableArgument(detailedArg)) {
+            if (_shouldBeVariableArgument(detailedArg)) {
                 variables[argName] = argValue
             }
         }
@@ -126,7 +137,7 @@ export class StorexGraphQLClient {
             const detailedArg = ensureDetailedPublicMethodValue(argDefinition) as PublicMethodDetailedArg
 
             let argValue : any
-            if (!shouldBeVariableArgument(detailedArg)) {
+            if (!_shouldBeVariableArgument(detailedArg)) {
                 if (detailedArg.positional) {
                     argValue = args.shift()
                 } else {
@@ -167,9 +178,24 @@ export class StorexGraphQLClient {
         }
         throw new Error(`Don't know how to consume method returning '${JSON.stringify(detailedReturnValue.type)}'`)
     }
+
+    _log(event : StorexGraphQLClientObserverEvent) {
+        if (this.options.observer) {
+            this.options.observer(event)
+        }
+    }
 }
 
-function shouldBeVariableArgument(detailedArg : PublicMethodDetailedArg) {
+export function storexGraphQLClientLogger(options : { eventTypes : string[] | 'all' }) {
+    const eventTypes = new Set(options.eventTypes)
+    return (event : StorexGraphQLClientObserverEvent) => {
+        if (options.eventTypes === 'all' || eventTypes.has(event.type)) {
+            console.log('Storex GraphQL client event', event)
+        }
+    }
+}
+
+function _shouldBeVariableArgument(detailedArg : PublicMethodDetailedArg) {
     return (
         isPublicMethodCollectionType(detailedArg.type) ||
         (isPublicMethodArrayType(detailedArg.type) && isPublicMethodCollectionType(detailedArg.type.array))
