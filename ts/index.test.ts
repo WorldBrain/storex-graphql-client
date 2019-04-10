@@ -11,6 +11,7 @@ import {
     PublicMethodDefinition, StorageModuleCollections } from '@worldbrain/storex-pattern-modules';
 import { setupStorexTest } from '@worldbrain/storex-pattern-modules/lib/index.tests';
 import { createStorexGraphQLSchema } from '@worldbrain/storex-graphql-schema/lib/modules'
+import { setupTestGraphQLStorexClient } from './index.tests';
 
 describe('StorexGraphQLClient', () => {
     async function setupTest(options : { modules : {[name : string] : StorageModuleInterface }, respond? : (...args) => Promise<any>, fetch? : (...args) => Promise<any>}) {
@@ -68,7 +69,7 @@ describe('StorexGraphQLClient', () => {
         }
 
         let storageManager : StorageManager = null
-        let serverModules : {[name : string] : StorageModule} = null
+        let serverModules : {[name : string] : StorageModuleInterface} = null
         if (options.setupServerModules) {
             const serverTestSetup = await setupStorexTest<{test : ServerTestModule}>({
                 collections: {},
@@ -97,27 +98,34 @@ describe('StorexGraphQLClient', () => {
     async function runMethodIntegrationTest(options : MethodTestOptions) {
         const { storageManager, serverModules, serverInfo, clientModules } = await setupMethodTest({ ...options, setupServerModules: true })
         
-        const schema = createStorexGraphQLSchema(serverModules, {storageManager, autoPkType: 'int', graphql})
-        const app = express()
-        const server = new ApolloServer({ schema })
-        app.use(bodyParser.json())
-        server.applyMiddleware({ app, path: '/graphql' })
+        const { client } = setupTestGraphQLStorexClient({
+            clientModules,
+            serverModules,
+            storageRegistry: storageManager.registry,
+            autoPkType: 'int',
+            graphql,
+        })
+        // const schema = createStorexGraphQLSchema(serverModules, {storageManager, autoPkType: 'int', graphql})
+        // const app = express()
+        // const server = new ApolloServer({ schema })
+        // app.use(bodyParser.json())
+        // server.applyMiddleware({ app, path: '/graphql' })
 
-        const { client } = await setupTest({ modules: clientModules, fetch: async (url, options) => {
-            try {
-                const response = await superTest(app).post('/graphql')
-                    .set(options.headers)
-                    .send(options.body)
-                return { json: async () => {
-                    return response.body
-                } }
-            } catch (e) {
-                if (e.response.body.errors) {
-                    return { json: async () => e.response.body }
-                }
-                throw e
-            }
-        } })
+        // const { client } = await setupTest({ modules: clientModules, fetch: async (url, options) => {
+        //     try {
+        //         const response = await superTest(app).post('/graphql')
+        //             .set(options.headers)
+        //             .send(options.body)
+        //         return { json: async () => {
+        //             return response.body
+        //         } }
+        //     } catch (e) {
+        //         if (e.response.body.errors) {
+        //             return { json: async () => e.response.body }
+        //         }
+        //         throw e
+        //     }
+        // } })
         const result = await client.getModules().test.testMethod(...options.callArgs)
         expect(result).toEqual(serverInfo.lastMethodReponse)
     }
