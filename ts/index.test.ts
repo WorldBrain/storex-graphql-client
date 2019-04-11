@@ -1,16 +1,11 @@
-import * as expect from 'expect'
+import expect from 'expect'
 import * as graphql from 'graphql'
-import * as express from 'express'
-import * as bodyParser from 'body-parser'
-import * as superTest from 'supertest'
-import { ApolloServer } from 'apollo-server-express'
 import { StorexGraphQLClient } from '.';
 import StorageManager, { StorageRegistry } from '@worldbrain/storex';
 import {
     StorageModuleConfig, StorageModuleInterface, StorageModule, registerModuleMapCollections,
     PublicMethodDefinition, StorageModuleCollections } from '@worldbrain/storex-pattern-modules';
 import { setupStorexTest } from '@worldbrain/storex-pattern-modules/lib/index.tests';
-import { createStorexGraphQLSchema } from '@worldbrain/storex-graphql-schema/lib/modules'
 import { setupTestGraphQLStorexClient } from './index.tests';
 
 describe('StorexGraphQLClient', () => {
@@ -105,27 +100,6 @@ describe('StorexGraphQLClient', () => {
             autoPkType: 'int',
             graphql,
         })
-        // const schema = createStorexGraphQLSchema(serverModules, {storageManager, autoPkType: 'int', graphql})
-        // const app = express()
-        // const server = new ApolloServer({ schema })
-        // app.use(bodyParser.json())
-        // server.applyMiddleware({ app, path: '/graphql' })
-
-        // const { client } = await setupTest({ modules: clientModules, fetch: async (url, options) => {
-        //     try {
-        //         const response = await superTest(app).post('/graphql')
-        //             .set(options.headers)
-        //             .send(options.body)
-        //         return { json: async () => {
-        //             return response.body
-        //         } }
-        //     } catch (e) {
-        //         if (e.response.body.errors) {
-        //             return { json: async () => e.response.body }
-        //         }
-        //         throw e
-        //     }
-        // } })
         const result = await client.getModules().test.testMethod(...options.callArgs)
         expect(result).toEqual(serverInfo.lastMethodReponse)
     }

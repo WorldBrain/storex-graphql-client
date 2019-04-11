@@ -1,7 +1,7 @@
 import * as graphqlModule from 'graphql'
-import * as express from 'express'
+import express from 'express'
 import * as bodyParser from 'body-parser'
-import * as superTest from 'supertest'
+import superTest from 'supertest'
 import { ApolloServer } from 'apollo-server-express'
 import { StorageRegistry } from '@worldbrain/storex';
 import { createStorexGraphQLSchema } from '@worldbrain/storex-graphql-schema/lib/modules'
@@ -16,7 +16,7 @@ export function setupTestGraphQLStorexClient(options : {
     autoPkType : 'int' | 'string'
     respond? : Function,
 }) {
-    const schema = createStorexGraphQLSchema(options.serverModules, options)
+    const schema = createStorexGraphQLSchema(options.serverModules, options) as any
     const app = express()
     const server = new ApolloServer({ schema })
     app.use(bodyParser.json())
@@ -34,7 +34,7 @@ export function setupTestGraphQLStorexClient(options : {
                 return response.body
             } }
         } catch (e) {
-            if (e.response.body.errors) {
+            if (e.response && e.response.body.errors) {
                 return { json: async () => e.response.body }
             }
             throw e

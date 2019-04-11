@@ -10,6 +10,8 @@
         "noLib": false,
         "downlevelIteration": true,
         "preserveConstEnums": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
         "declaration": true,
         "sourceMap": true,
         "suppressImplicitAnyIndexErrors": true,
