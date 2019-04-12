@@ -6,7 +6,7 @@ import { ApolloServer } from 'apollo-server-express'
 import { StorageRegistry } from '@worldbrain/storex';
 import { createStorexGraphQLSchema } from '@worldbrain/storex-graphql-schema/lib/modules'
 import { StorexGraphQLClient } from '.';
-import { registerModuleMapCollections, StorageModuleInterface } from '../../storex-pattern-modules/lib';
+import { registerModuleMapCollections, StorageModuleInterface } from '@worldbrain/storex-pattern-modules/lib';
 
 export function setupTestGraphQLStorexClient(options : {
     clientModules : {[name : string] : StorageModuleInterface},
